@@ -108,11 +108,10 @@ class ViewOrdersWidget(QWidget):
         btn_layout.addStretch(1)
         vlayout.addLayout(btn_layout)
 
-        # ==================== SALES ANALYTICS SECTION ====================
+        # GRAFIK PENJUALAN
         analytics_group = QGroupBox("GRAFIK PENJUALAN")
         analytics_layout = QVBoxLayout(analytics_group)
 
-        # Month/Year selector row
         filter_layout = QHBoxLayout()
         filter_layout.addWidget(QLabel("Bulan:"))
         
@@ -132,7 +131,6 @@ class ViewOrdersWidget(QWidget):
         filter_layout.addStretch(1)
         analytics_layout.addLayout(filter_layout)
 
-        # Matplotlib chart canvas with fixed minimum height
         self.figure = Figure(figsize=(8, 3), dpi=100)
         self.canvas = FigureCanvasQTAgg(self.figure)
         self.canvas.setMinimumHeight(280)
@@ -141,20 +139,17 @@ class ViewOrdersWidget(QWidget):
 
         vlayout.addWidget(analytics_group)
 
-        # Add stretch at the end to push content up
         vlayout.addStretch(1)
 
-        # Set the content widget in the scroll area
         scroll_area.setWidget(content_widget)
         main_layout.addWidget(scroll_area)
 
-        # ==================== SIGNAL CONNECTIONS ====================
         self.cmb_month.currentIndexChanged.connect(self.refresh_sales_chart)
         self.spn_year.valueChanged.connect(self.refresh_sales_chart)
         self.tbl_orders.itemSelectionChanged.connect(self.on_order_selected)
 
         self.reload_orders()
-        self.refresh_sales_chart()  # Initial chart render
+        self.refresh_sales_chart()  # chart render
 
 
     def reload_orders(self):
@@ -204,7 +199,6 @@ class ViewOrdersWidget(QWidget):
         self.btn_delete.setEnabled(True)
 
     def on_delete_clicked(self):
-        """Handler untuk tombol hapus pesanan."""
         if self.current_order_id is None:
             QMessageBox.warning(self, "Peringatan", "Pilih pesanan terlebih dahulu.")
             return
@@ -248,8 +242,6 @@ class ViewOrdersWidget(QWidget):
             self.tbl_detail.setItem(r, 1, it_qty)
             self.tbl_detail.setItem(r, 2, it_note)
             self.tbl_detail.setItem(r, 3, it_sub)
-
-    # ==================== SALES ANALYTICS ====================
 
     def refresh_sales_chart(self):
         """Refresh the sales bar chart based on selected month/year."""
@@ -301,7 +293,7 @@ class ViewOrdersWidget(QWidget):
         # Redraw the canvas
         self.canvas.draw()
 
-    # ==================== PRINTING FUNCTIONALITY ====================
+    # FUNCTION PRINT STRUK
 
     def on_print_clicked(self):
         """Handler untuk tombol cetak struk."""
