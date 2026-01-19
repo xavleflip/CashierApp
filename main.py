@@ -28,7 +28,7 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.new_order_tab, "New Order")
         tabs.addTab(self.view_orders_tab, "View Orders")
 
-        # Setelah simpan order -> refresh View Orders dan pindah tab
+        # Setelah simpan order, refresh View Orders dan pindah tab
         self.new_order_tab.order_saved.connect(self.on_order_saved)
 
         self.tabs = tabs
@@ -42,7 +42,6 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
 
-    # Load and apply the Bangor Burger theme
     try:
         with open("theme.qss", "r", encoding="utf-8") as f:
             app.setStyleSheet(f.read())
