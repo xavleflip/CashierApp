@@ -8,8 +8,6 @@ from PySide6.QtWidgets import (
     QSpinBox,QMessageBox
 )
 
-
-# -------------------- Tab 1: New Order --------------------
 class NewOrderWidget(QWidget):
     order_saved = Signal()  # emit saat order tersimpan
 
@@ -84,7 +82,6 @@ class NewOrderWidget(QWidget):
 
         vlayout.addLayout(grid)
 
-        # Bottom controls
         bottom = QHBoxLayout()
         self.btn_total = QPushButton("Hitung Total")
         self.btn_save = QPushButton("Simpan Pesanan")
@@ -107,7 +104,7 @@ class NewOrderWidget(QWidget):
         vlayout.addStretch(1)
 
     def set_row_enabled(self, qty: QSpinBox, note: QLineEdit, enabled: bool):
-        # Jika belum checked -> tidak bisa interaksi
+        # Jika belum checked, tidak dapat melakukan edit pada kolom
         qty.setEnabled(enabled)
 
         note.setEnabled(enabled)
