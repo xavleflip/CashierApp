@@ -137,3 +137,43 @@ class Database:
             ORDER BY id ASC
         """, (order_id,)).fetchall()
 
+    def get_monthly_sales(self, month: int, year: int) -> list[tuple[int, int]]:
+        """
+        Get daily sales totals for a given month/year.
+        Returns: list of (day, total_sales) tuples
+        """
+        cur = self.conn.cursor()
+        # Aggregate orders by day, handling dates stored as 'YYYY-MM-DD HH:MM:SS'
+        rows = cur.execute("""
+            SELECT CAST(strftime('%d', created_at) AS INTEGER) AS day,
+                   SUM(total) AS daily_total
+            FROM orders
+            WHERE strftime('%Y', created_at) = ?
+              AND strftime('%m', created_at) = ?
+            GROUP BY day
+            ORDER BY day
+        """, (str(year), f"{month:02d}")).fetchall()
+        return [(row[0], row[1]) for row in rows]
+
+    def delete_order(self, order_id: int) -> bool:
+        """
+        Delete an order and all its associated items (cascading delete).
+        Uses transaction to ensure data integrity.
+        Returns: True if successful, raises exception on failure.
+        """
+        cur = self.conn.cursor()
+        try:
+            cur.execute("BEGIN;")
+            
+            # First, delete all items associated with this order
+            cur.execute("DELETE FROM order_items WHERE order_id = ?", (order_id,))
+            
+            # Then, delete the order header
+            cur.execute("DELETE FROM orders WHERE id = ?", (order_id,))
+            
+            cur.execute("COMMIT;")
+            return True
+        except Exception:
+            cur.execute("ROLLBACK;")
+            raise
+

@@ -1,30 +1,56 @@
 from database_handler import Database, rupiah
+from receipt_printer import ReceiptPrinter
 
-from PySide6.QtCore import Qt, QSizeF, QMarginsF
-from PySide6.QtGui import QPageLayout, QPageSize, QTextDocument, QAction
-from PySide6.QtPrintSupport import QPrinter, QPrintPreviewDialog
+import calendar
+from datetime import datetime
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
+
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QTableWidget, QTableWidgetItem, QHeaderView,
-    QPushButton, QMessageBox
+    QPushButton, QMessageBox, QGroupBox, QComboBox, QSpinBox,
+    QScrollArea, QFrame, QSizePolicy
 )
 
 
 # -------------------- Tab 2: View Orders --------------------
 class ViewOrdersWidget(QWidget):
-    # Konfigurasi Toko (bisa dipindahkan ke config file)
-    STORE_NAME = "WARUNG SARAPAN MAK UDE"
-    STORE_ADDRESS = "Jl. Adi Sucipto Gg. Hj. Aminah"
-    STORE_PHONE = "Tel: (021) 1234-5678"
+    """Widget for viewing orders, order details, and sales analytics."""
 
     def __init__(self, db: Database):
         super().__init__()
         self.db = db
         self.current_order_id = None
         self.current_order_no = None
+        
+        # Initialize receipt printer with store configuration
+        self.receipt_printer = ReceiptPrinter(
+            nama_toko="WARUNG SARAPAN MAK UDE",
+            alamat="Jl. Adi Sucipto Gg. Hj. Aminah",
+            no_telp="Tel: (021) 1234-5678"
+        )
 
-        vlayout = QVBoxLayout(self)
+        # Main layout for the widget
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
+        # ==================== SCROLL AREA WRAPPER ====================
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # Content widget inside scroll area
+        content_widget = QWidget()
+        content_widget.setObjectName("scrollContent")
+        vlayout = QVBoxLayout(content_widget)
+        vlayout.setSpacing(12)
+        vlayout.setContentsMargins(16, 16, 16, 16)
+
+        # ==================== ORDERS TABLE SECTION ====================
         title = QLabel("DAFTAR PESANAN")
         title.setStyleSheet("font-weight: bold; font-size: 14px;")
         vlayout.addWidget(title)
@@ -39,9 +65,12 @@ class ViewOrdersWidget(QWidget):
         self.tbl_orders.setSelectionBehavior(QTableWidget.SelectRows)
         self.tbl_orders.setSelectionMode(QTableWidget.SingleSelection)
         self.tbl_orders.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tbl_orders.setMinimumHeight(250)
+        self.tbl_orders.setMaximumHeight(350)
+        self.tbl_orders.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         vlayout.addWidget(self.tbl_orders)
 
-        # Detail label + tabel detail (awalnya disembunyikan)
+        # ==================== ORDER DETAIL SECTION ====================
         self.lbl_detail = QLabel("Detail Pesanan: (pilih salah satu pesanan)")
         self.lbl_detail.setStyleSheet("font-weight: bold;")
         vlayout.addWidget(self.lbl_detail)
@@ -54,22 +83,79 @@ class ViewOrdersWidget(QWidget):
         self.tbl_detail.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.tbl_detail.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.tbl_detail.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.tbl_detail.setMinimumHeight(320)
+        self.tbl_detail.setMaximumHeight(550)
+        self.tbl_detail.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         self.tbl_detail.setVisible(False)
         vlayout.addWidget(self.tbl_detail)
 
-        # Tombol Print Receipt
+        # ==================== ACTION BUTTONS SECTION ====================
         btn_layout = QHBoxLayout()
-        self.btn_print = QPushButton("🖨️ Cetak Struk")
-        self.btn_print.setFixedHeight(35)
+        
+        self.btn_print = QPushButton("CETAK STRUK")
+        self.btn_print.setFixedHeight(45)
         self.btn_print.setEnabled(False)  # Disabled sampai ada order dipilih
         self.btn_print.clicked.connect(self.on_print_clicked)
         btn_layout.addWidget(self.btn_print)
+        
+        self.btn_delete = QPushButton("HAPUS PESANAN")
+        self.btn_delete.setFixedHeight(45)
+        self.btn_delete.setObjectName("dangerButton")  # Use danger style from QSS
+        self.btn_delete.setEnabled(False)  # Disabled sampai ada order dipilih
+        self.btn_delete.clicked.connect(self.on_delete_clicked)
+        btn_layout.addWidget(self.btn_delete)
+        
         btn_layout.addStretch(1)
         vlayout.addLayout(btn_layout)
 
+        # ==================== SALES ANALYTICS SECTION ====================
+        analytics_group = QGroupBox("GRAFIK PENJUALAN")
+        analytics_layout = QVBoxLayout(analytics_group)
+
+        # Month/Year selector row
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Bulan:"))
+        
+        self.cmb_month = QComboBox()
+        months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                  "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        self.cmb_month.addItems(months)
+        self.cmb_month.setCurrentIndex(datetime.now().month - 1)
+        filter_layout.addWidget(self.cmb_month)
+        
+        filter_layout.addWidget(QLabel("Tahun:"))
+        self.spn_year = QSpinBox()
+        self.spn_year.setRange(2020, 2050)
+        self.spn_year.setValue(datetime.now().year)
+        filter_layout.addWidget(self.spn_year)
+        
+        filter_layout.addStretch(1)
+        analytics_layout.addLayout(filter_layout)
+
+        # Matplotlib chart canvas with fixed minimum height
+        self.figure = Figure(figsize=(8, 3), dpi=100)
+        self.canvas = FigureCanvasQTAgg(self.figure)
+        self.canvas.setMinimumHeight(280)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        analytics_layout.addWidget(self.canvas)
+
+        vlayout.addWidget(analytics_group)
+
+        # Add stretch at the end to push content up
+        vlayout.addStretch(1)
+
+        # Set the content widget in the scroll area
+        scroll_area.setWidget(content_widget)
+        main_layout.addWidget(scroll_area)
+
+        # ==================== SIGNAL CONNECTIONS ====================
+        self.cmb_month.currentIndexChanged.connect(self.refresh_sales_chart)
+        self.spn_year.valueChanged.connect(self.refresh_sales_chart)
         self.tbl_orders.itemSelectionChanged.connect(self.on_order_selected)
 
         self.reload_orders()
+        self.refresh_sales_chart()  # Initial chart render
+
 
     def reload_orders(self):
         orders = self.db.list_orders()
@@ -95,6 +181,7 @@ class ViewOrdersWidget(QWidget):
         self.tbl_detail.setRowCount(0)
         self.tbl_detail.setVisible(False)
         self.btn_print.setEnabled(False)
+        self.btn_delete.setEnabled(False)
 
     def on_order_selected(self):
         items = self.tbl_orders.selectedItems()
@@ -114,6 +201,32 @@ class ViewOrdersWidget(QWidget):
         self.current_order_no = order_no
         self.load_order_detail(order_id, order_no)
         self.btn_print.setEnabled(True)
+        self.btn_delete.setEnabled(True)
+
+    def on_delete_clicked(self):
+        """Handler untuk tombol hapus pesanan."""
+        if self.current_order_id is None:
+            QMessageBox.warning(self, "Peringatan", "Pilih pesanan terlebih dahulu.")
+            return
+
+        # Confirmation dialog
+        reply = QMessageBox.question(
+            self,
+            "Konfirmasi Hapus",
+            f"Apakah Anda yakin ingin menghapus pesanan {self.current_order_no}?\n\n"
+            "Tindakan ini tidak dapat dibatalkan.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply == QMessageBox.Yes:
+            try:
+                self.db.delete_order(self.current_order_id)
+                QMessageBox.information(self, "Sukses", f"Pesanan {self.current_order_no} berhasil dihapus.")
+                self.reload_orders()
+                self.refresh_sales_chart()  # Refresh chart after deletion
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Gagal menghapus pesanan:\n{e}")
 
     def load_order_detail(self, order_id: int, order_no: str):
         details = self.db.list_order_items(order_id)
@@ -136,6 +249,58 @@ class ViewOrdersWidget(QWidget):
             self.tbl_detail.setItem(r, 2, it_note)
             self.tbl_detail.setItem(r, 3, it_sub)
 
+    # ==================== SALES ANALYTICS ====================
+
+    def refresh_sales_chart(self):
+        """Refresh the sales bar chart based on selected month/year."""
+        month = self.cmb_month.currentIndex() + 1  # 1-indexed
+        year = self.spn_year.value()
+        
+        # Get month name for title
+        month_names = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                       "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
+        month_name = month_names[month - 1]
+        
+        # Get number of days in the month
+        _, num_days = calendar.monthrange(year, month)
+        
+        # Fetch sales data from database
+        sales_data = self.db.get_monthly_sales(month, year)
+        sales_dict = {day: total for day, total in sales_data}
+        
+        # Zero-fill missing days
+        days = list(range(1, num_days + 1))
+        totals = [sales_dict.get(day, 0) for day in days]
+        
+        # Clear and redraw the figure
+        self.figure.clear()
+        ax = self.figure.add_subplot(111)
+        
+        # Create bar chart
+        bars = ax.bar(days, totals, color='#4A90D9', edgecolor='#2E5D8C', linewidth=0.5)
+        
+        # Style the chart
+        ax.set_xlabel('Tanggal', fontsize=9)
+        ax.set_ylabel('Total Penjualan (Rp)', fontsize=9)
+        ax.set_title(f'GRAFIK PENJUALAN: {month_name} {year}', fontsize=11, fontweight='bold')
+        
+        # X-axis: show all days but rotate labels if crowded
+        ax.set_xticks(days)
+        ax.set_xticklabels(days, rotation=45 if num_days > 20 else 0, ha='right' if num_days > 20 else 'center', fontsize=7)
+        
+        # Y-axis: format as currency
+        ax.yaxis.set_major_formatter(lambda x, p: f'Rp{x/1000:.0f}K' if x >= 1000 else f'Rp{x:.0f}')
+        
+        # Add grid lines for readability
+        ax.grid(axis='y', alpha=0.3, linestyle='--')
+        ax.set_axisbelow(True)
+        
+        # Tight layout to prevent label cutoff
+        self.figure.tight_layout()
+        
+        # Redraw the canvas
+        self.canvas.draw()
+
     # ==================== PRINTING FUNCTIONALITY ====================
 
     def on_print_clicked(self):
@@ -145,213 +310,14 @@ class ViewOrdersWidget(QWidget):
             return
 
         try:
-            self.print_receipt(self.current_order_id)
+            # Fetch order data from database
+            order = self.db.get_order_by_id(self.current_order_id)
+            if order is None:
+                raise ValueError(f"Order dengan ID {self.current_order_id} tidak ditemukan.")
+            
+            items = self.db.list_order_items(self.current_order_id)
+            
+            # Delegate printing to ReceiptPrinter
+            self.receipt_printer.print_receipt(self, order, items)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Gagal mencetak struk:\n{e}")
-
-    def print_receipt(self, order_id: int):
-        """
-        Generate dan print struk untuk order tertentu.
-        Menggunakan QPrintPreviewDialog untuk preview sebelum print.
-        """
-        # Ambil data order dari database
-        order = self.db.get_order_by_id(order_id)
-        if order is None:
-            raise ValueError(f"Order dengan ID {order_id} tidak ditemukan.")
-
-        items = self.db.list_order_items(order_id)
-
-        # Generate HTML receipt
-        html_content = self._generate_receipt_html(order, items)
-
-        # Setup printer untuk thermal printer (58mm atau 80mm)
-        # PENTING: Gunakan ScreenResolution untuk menghindari scaling issue
-        printer = QPrinter(QPrinter.ScreenResolution)
-
-        # Konfigurasi ukuran kertas thermal (80mm width - lebih umum)
-        # Tinggi dibuat sangat panjang untuk roll paper (continuous feed)
-        paper_width_mm = 80
-        paper_height_mm = 3000  # Tinggi sangat panjang untuk continuous roll
-
-        custom_size = QPageSize(QSizeF(paper_width_mm, paper_height_mm), QPageSize.Millimeter)
-        page_layout = QPageLayout(
-            custom_size,
-            QPageLayout.Portrait,
-            QMarginsF(0, 0, 0, 0),  # ZERO margins - content fills full width
-            QPageLayout.Millimeter
-        )
-        printer.setPageLayout(page_layout)
-
-        # Buat preview dialog
-        preview_dialog = QPrintPreviewDialog(printer, self)
-        preview_dialog.setWindowTitle(f"Preview Struk - {order['order_no']}")
-        preview_dialog.resize(450, 700)
-
-        # Set Fit to Width sebagai default zoom
-        # QPrintPreviewDialog menyediakan toolbar actions, kita cari dan trigger FitToWidth
-        for action in preview_dialog.findChildren(QAction):
-            if action.text() and 'width' in action.text().lower():
-                action.trigger()
-                break
-
-        # Connect paintRequested signal untuk render dokumen
-        preview_dialog.paintRequested.connect(
-            lambda p: self._render_receipt_to_printer(p, html_content, paper_width_mm)
-        )
-
-        preview_dialog.exec()
-
-    def _generate_receipt_html(self, order, items) -> str:
-        """
-        Generate HTML string untuk struk/receipt.
-        Format: Header -> Items Table -> Footer
-        
-        PENTING: Qt's QTextDocument hanya mendukung subset HTML4.
-        - Tidak support: flexbox, CSS grid, banyak CSS property
-        - Gunakan: <table> dengan align attribute, font tag, inline styles sederhana
-        """
-        order_no = order["order_no"]
-        created_at = order["created_at"]
-        total = int(order["total"])
-
-        # Build items table rows dengan HTML4 attributes
-        items_rows = ""
-        for item in items:
-            item_name = item["item_name"]
-            qty = int(item["qty"])
-            price = int(item["price"])
-            subtotal = int(item["subtotal"])
-            note = item["note"] or ""
-
-            items_rows += f"""
-            <tr>
-                <td align="left" valign="top">{item_name}</td>
-                <td align="center" valign="top">{qty}</td>
-                <td align="right" valign="top">{rupiah(price)}</td>
-                <td align="right" valign="top">{rupiah(subtotal)}</td>
-            </tr>
-            """
-            # Jika ada catatan, tampilkan di baris terpisah
-            if note:
-                items_rows += f"""
-                <tr>
-                    <td colspan="4" align="left">
-                        <font size="2" color="#666666">&nbsp;&nbsp;Note: {note}</font>
-                    </td>
-                </tr>
-                """
-
-        # HTML dengan format HTML4 yang compatible dengan Qt Rich Text
-        html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-</head>
-<body style="font-family: 'Courier New', Courier, monospace; font-size: 12pt; margin: 0; padding: 0;">
-
-<!-- HEADER - Menggunakan table untuk centering -->
-<table width="100%" cellpadding="2" cellspacing="0">
-    <tr>
-        <td align="center">
-            <font size="4"><b>{self.STORE_NAME}</b></font>
-        </td>
-    </tr>
-    <tr>
-        <td align="center">
-            <font size="2">{self.STORE_ADDRESS}</font>
-        </td>
-    </tr>
-    <tr>
-        <td align="center">
-            <font size="2">{self.STORE_PHONE}</font>
-        </td>
-    </tr>
-</table>
-
-<!-- Separator -->
-<table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td><hr></td></tr>
-</table>
-
-<!-- ORDER INFO -->
-<table width="100%" cellpadding="2" cellspacing="0">
-    <tr>
-        <td width="40%" align="left"><b>No. Transaksi:</b></td>
-        <td width="60%" align="left">{order_no}</td>
-    </tr>
-    <tr>
-        <td align="left"><b>Tanggal:</b></td>
-        <td align="left">{created_at}</td>
-    </tr>
-</table>
-
-<!-- Separator -->
-<table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td><hr></td></tr>
-</table>
-
-<!-- ITEMS TABLE -->
-<table width="100%" cellpadding="3" cellspacing="0" border="0">
-    <tr>
-        <td width="40%" align="left"><b><u>Item</u></b></td>
-        <td width="15%" align="center"><b><u>Qty</u></b></td>
-        <td width="20%" align="right"><b><u>Harga</u></b></td>
-        <td width="25%" align="right"><b><u>Subtotal</u></b></td>
-    </tr>
-    {items_rows}
-</table>
-
-<!-- Separator -->
-<table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td><hr></td></tr>
-</table>
-
-<!-- TOTAL SECTION -->
-<table width="100%" cellpadding="3" cellspacing="0">
-    <tr>
-        <td align="right">
-            <font size="4"><b>TOTAL: {rupiah(total)}</b></font>
-        </td>
-    </tr>
-</table>
-
-<!-- Separator -->
-<table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td><hr></td></tr>
-</table>
-
-<!-- FOOTER -->
-<table width="100%" cellpadding="2" cellspacing="0">
-    <tr>
-    </tr>
-    <tr>
-        <td align="center"><b>*** TERIMA KASIH ***</b></td>
-    </tr>
-    <tr>
-    </tr>
-</table>
-
-</body>
-</html>
-        """
-        return html
-
-    def _render_receipt_to_printer(self, printer: QPrinter, html_content: str, paper_width_mm: int):
-        """
-        Render HTML content ke printer menggunakan QTextDocument.
-        """
-        document = QTextDocument()
-
-        # Gunakan Point units untuk lebih akurat dengan QTextDocument
-        page_rect = printer.pageRect(QPrinter.Point)
-        document.setPageSize(page_rect.size())
-        
-        # Set text width agar content flow sesuai lebar halaman
-        document.setTextWidth(page_rect.width())
-
-        # Set HTML content
-        document.setHtml(html_content)
-
-        # Print document
-        document.print_(printer)

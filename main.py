@@ -42,6 +42,13 @@ class MainWindow(QMainWindow):
 def main():
     app = QApplication(sys.argv)
 
+    # Load and apply the Bangor Burger theme
+    try:
+        with open("theme.qss", "r", encoding="utf-8") as f:
+            app.setStyleSheet(f.read())
+    except FileNotFoundError:
+        print("Warning: theme.qss not found, using default style")
+
     db = Database(DB_PATH)
     db.init_schema()
 

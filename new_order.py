@@ -64,11 +64,11 @@ class NewOrderWidget(QWidget):
             qty.setMaximum(10)     
             qty.setValue(1)
             qty.setFixedWidth(80)
-            qty.setFixedHeight(30)
+            qty.setFixedHeight(40)
 
             note = QLineEdit()
-            note.setPlaceholderText("contoh: tanpa sambal, pedas,tanpa gula, dll")
-            note.setFixedHeight(30)
+            note.setPlaceholderText("contoh: tanpa sambal, pedas, dll")
+            note.setFixedHeight(40)
 
             # default terkunci jika belum dicentang
             self.set_row_enabled(qty, note, enabled=False)
