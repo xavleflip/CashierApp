@@ -1,4 +1,5 @@
 import sys
+import os
 
 from database_handler import Database
 from new_order import NewOrderWidget
@@ -7,6 +8,16 @@ from view_order import ViewOrdersWidget
 from PySide6.QtWidgets import QMainWindow,QApplication, QTabWidget
 
 DB_PATH = "pesanan_warung.db"
+
+def resource_path(relative_path):
+    """ Dapatkan path absolut ke resource, bisa untuk dev maupun untuk PyInstaller """
+    try:
+        # PyInstaller membuat folder temp dan menyimpannya di _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 class MainWindow(QMainWindow):
@@ -41,12 +52,12 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-
     try:
-        with open("theme.qss", "r", encoding="utf-8") as f:
+        qss_file = resource_path("theme.qss") 
+        with open(qss_file, "r", encoding="utf-8") as f:
             app.setStyleSheet(f.read())
     except FileNotFoundError:
-        print("Warning: theme.qss not found, using default style")
+        print(f"Warning: theme.qss not found at {resource_path('theme.qss')}, using default style")
 
     db = Database(DB_PATH)
     db.init_schema()
