@@ -35,13 +35,3 @@ Aplikasi ini dibangun menggunakan kombinasi teknologi modern untuk menjamin stab
 * **Database:** **SQLite** untuk penyimpanan data lokal yang ringan dan efisien.
 
 ---
-
-## 📸 Antarmuka Aplikasi
-
-> **Tips:** Masukkan file gambar kamu ke folder repositori dan ganti link di bawah ini agar muncul di halaman GitHub.
-
-| Modul Pencatatan Pesanan | Grafik Analisis Penjualan |
-| :---: | :---: |
-| ![New Order Screen](https://via.placeholder.com/400x250?text=Screenshot+New+Order) | ![Sales Chart](https://via.placeholder.com/400x250?text=Screenshot+Sales+Graph) |
-
----
